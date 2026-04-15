@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Create New Question Paper</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        /* Custom Styles */
+        .paper-meta-card { background-color: #e9ecef; border: 1px solid #dee2e6; }
+        .active-paper-box { border: 2px solid #007bff; background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-bottom: 20px;}
+        .question-box-mini { border: 1px solid #ccc; padding: 5px; margin-bottom: 5px; border-radius: 3px; font-size: 0.9em; }
+        .question-box-mini:hover { background-color: #f0f0f0; }
+        .text-truncate-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body onload="checkRole('Faculty')">
+    <script src="auth_check.js"></script>
+    <script src="logout_redirect.js"></script>
+    
+        <nav class="navbar navbar-light bg-info">
+        <div class="container">
+            <a class="navbar-brand text-white" href="faculty_dashboard.html">Faculty Dashboard</a>
+            <button class="btn btn-sm btn-danger" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h2 class="mb-4">📝 Question Paper Creator</h2>
+
+                <div id="activePaperBox" class="active-paper-box" style="display: none;">
+            <h5 class="text-primary mb-1">Active Paper: <span id="activePaperTitle"></span></h5>
+            <p class="mb-0 small">Paper ID: <strong id="activePaperID"></strong> | Status: <span class="badge bg-warning">Drafting</span></p>
+            <button class="btn btn-sm btn-outline-danger mt-2" onclick="clearActivePaper()">Start New Paper</button>
+        </div>
+
+                <div class="card p-4 mb-5 shadow paper-meta-card" id="paperMetadataSection">
+            <h5 class="card-title">1. Define New Paper Details</h5>
+            <form id="createPaperForm" class="row g-3">
+                
+                <div class="col-md-6">
+                    <label for="courseSelect" class="form-label">Course</label>
+                    <select id="courseSelect" class="form-select" required onchange="fetchFacultyByCourse(this.value)">
+                        <option value="">Select Course</option>
+                    </select>
+                    <input type="hidden" id="selectedCourseID" required>
+                </div>
+                 <div class="col-md-6">
+                    <label for="facultySelect" class="form-label">Set By (Faculty)</label>
+                    <select id="facultySelect" class="form-select" required>
+                        <option value="">Select Faculty</option>
+                    </select>
+                </div>
+
+                <div class="col-md-3">
+                    <label for="yearInput" class="form-label">Year</label>
+                    <input type="number" id="yearInput" class="form-control" placeholder="e.g., 2024" required min="2000" max="2100">
+                </div>
+                <div class="col-md-3">
+                    <label for="semesterSelect" class="form-label">Semester</label>
+                    <select id="semesterSelect" class="form-select" required>
+                        <option value="">Select Sem</option>
+                        <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                        <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="examTypeSelect" class="form-label">Exam Type</label>
+                    <select id="examTypeSelect" class="form-select" required>
+                        <option value="">Select Type</option>
+                        <option value="Quiz">Quiz</option>
+                        <option value="MidSem">MidSem</option>
+                        <option value="EndSem">EndSem</option>
+                        <option value="Auxiliary">Auxiliary</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary w-100">Create Paper Draft</button>
+                </div>
+            </form>
+        </div>
+
+                <div id="paperAssemblySection" style="display: none;">
+            <h5 class="mb-4">2. Assemble Questions (Search & Add)</h5>
+            <div class="row">
+                
+                                <div class="col-md-4">
+                    <div class="card p-3 shadow-sm">
+                        <h6 class="card-title">Filter Question Bank</h6>
+                        <form id="questionFilterForm">
+                            <div class="mb-2">
+                                <label for="cloSelect" class="form-label small">CLO</label>
+                                <select id="cloSelect" class="form-select form-select-sm" onchange="handleQuestionSearch()">
+                                    <option value="">All CLOs</option>
+                                </select>
+                            </div>
+                            <div class="mb-2">
+                                <label for="difficultySelect" class="form-label small">Difficulty</label>
+                                <select id="difficultySelect" class="form-select form-select-sm" onchange="handleQuestionSearch()">
+                                    <option value="">All Difficulties</option>
+                                    <option value="Easy">Easy</option>
+                                    <option value="Medium">Medium</option>
+                                    <option value="Hard">Hard</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="qTypeSelect" class="form-label small">Question Type</label>
+                                <select id="qTypeSelect" class="form-select form-select-sm" onchange="handleQuestionSearch()">
+                                    <option value="">All Types</option>
+                                    <option value="MCQ">MCQ</option>
+                                    <option value="Theory">Theory</option>
+                                    <option value="Numerical">Numerical</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="searchText" class="form-label small">Search Text</label>
+                                <input type="text" id="searchText" class="form-control form-control-sm" placeholder="Keywords in question text">
+                            </div>
+                            <button type="submit" class="btn btn-secondary btn-sm w-100">Search Questions</button>
+                        </form>
+                    </div>
+                </div>
+
+                                <div class="col-md-4">
+                    <div class="card p-3 shadow-sm" style="min-height: 400px;">
+                        <h6 class="card-title">Available Questions (Excluding those added below)</h6>
+                        <div id="searchResults" class="list-group list-group-flush">
+                            <p class="text-muted text-center mt-3">Filter above to find questions.</p>
+                        </div>
+                    </div>
+                </div>
+
+                                <div class="col-md-4">
+                    <div class="card p-3 shadow-sm" style="min-height: 400px;">
+                        <h6 class="card-title text-success">Questions in Paper (<span id="paperQuestionCount">0</span>)</h6>
+                        <div id="currentPaperQuestions" class="list-group list-group-flush">
+                            <p class="text-muted text-center mt-3">Add questions from the list on the left.</p>
+                        </div>
+                        <h6 class="mt-3">Total Marks: <strong id="totalMarks">0</strong></h6>
+                    </div>
+                </div>
+
+            </div>
+            
+                        <a href="#" id="viewPaperLink" class="btn btn-info mt-4" target="_blank" style="display: none;">View Paper Preview</a>
+
+        </div>
+    </div>
+
+<script>
+    const API_BASE_URL = 'http://127.0.0.1:5000/api'; 
+    let activePaper = null; // Stores { id, course_id, title } of the paper being edited
+    let currentPaperQuestionsData = []; // Stores the full question data for the paper content
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initial setup
+        loadInitialData(); 
+        
+        // Attach event listeners
+        document.getElementById('createPaperForm').addEventListener('submit', handleCreatePaper);
+        // Use handleQuestionSearch for form submission (e.g., hitting enter on search box)
+        document.getElementById('questionFilterForm').addEventListener('submit', handleQuestionSearch); 
+        
+        // Load state from session storage
+        loadActivePaperFromStorage();
+    });
+
+    // --- GENERIC UTILITIES ---
+    function populateDropdown(selectId, items, displayKey, valueKey) {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+
+        // Preserve the default option
+        const defaultOption = select.querySelector('option[value=""]') || document.createElement('option');
+        if (!defaultOption.parentNode) {
+            defaultOption.value = "";
+            defaultOption.textContent = select.querySelector('option') ? select.querySelector('option').textContent : `Select ${selectId.replace('Select', '')}`;
+        }
+
+        select.innerHTML = ''; 
+        select.appendChild(defaultOption);
+
+        // Add fetched items
+        items.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item[valueKey];
+            
+            // Custom display logic for courses/CLOs
+            if (selectId === 'courseSelect' && item.CourseCode) {
+                option.textContent = `${item.CourseName} (${item.CourseCode})`;
+            } else if (selectId === 'cloSelect' && item.CLOText) {
+                option.textContent = item.CLOText.split(' | ')[0]; 
+            } else {
+                option.textContent = item[displayKey];
+            }
+            
+            select.appendChild(option);
+        });
+    }
+
+    // --- SETUP & INITIAL LOAD ---
+
+    async function loadInitialData() {
+        try {
+            // Load Courses
+            const courseResponse = await fetch(`${API_BASE_URL}/courses`);
+            if (!courseResponse.ok) throw new Error('Failed to fetch courses.');
+            const courses = await courseResponse.json();
+            populateDropdown('courseSelect', courses, 'CourseName', 'CourseID');
+            
+            // Load all Faculty
+            const facultyResponse = await fetch(`${API_BASE_URL}/faculty`);
+            if (!facultyResponse.ok) throw new Error('Failed to fetch faculty.');
+            const faculty = await facultyResponse.json();
+            populateDropdown('facultySelect', faculty, 'FacultyName', 'FacultyID');
+
+        } catch (error) {
+            console.error('Error loading initial data:', error);
+            alert('CRITICAL ERROR: Failed to load required data (Courses/Faculty).');
+        }
+        
+        // Disable CLO filter initially
+        document.getElementById('cloSelect').disabled = true;
+    }
+    
+    // Fetches CLOs based on the selected course
+    async function fetchClosByCourse(courseId) {
+        const cloSelect = document.getElementById('cloSelect');
+        populateDropdown('cloSelect', [], 'CLOText', 'CLOID'); // Reset
+        cloSelect.disabled = true;
+
+        if (!courseId) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/clos/${courseId}`);
+            if (response.ok) {
+                const clos = await response.json();
+                populateDropdown('cloSelect', clos, 'CLOText', 'CLOID');
+                cloSelect.disabled = false;
+            }
+        } catch (error) {
+            console.error('Error loading CLOs:', error);
+        }
+    }
+    
+    // Helper runs when a course is selected
+    function fetchFacultyByCourse(courseId) {
+        document.getElementById('selectedCourseID').value = courseId;
+        fetchClosByCourse(courseId); // Update CLO filter options
+    }
+    
+    // --- PAPER METADATA MANAGEMENT ---
+
+    function loadActivePaperFromStorage() {
+        const storedPaper = sessionStorage.getItem('activePaper');
+        if (storedPaper) {
+            activePaper = JSON.parse(storedPaper);
+            updatePaperAssemblyView();
+            fetchCurrentPaperQuestions(); // Load existing questions
+        }
+    }
+    
+    function clearActivePaper() {
+        // Reset state
+        activePaper = null;
+        sessionStorage.removeItem('activePaper');
+        currentPaperQuestionsData = [];
+
+        // Reset UI
+        updatePaperAssemblyView();
+        document.getElementById('createPaperForm').reset();
+        document.getElementById('questionFilterForm').reset();
+        renderCurrentPaperQuestions(); // Resets the marks/count/list
+        document.getElementById('searchResults').innerHTML = '<p class="text-muted text-center mt-3">Filter above to find questions.</p>';
+    }
+
+    async function handleCreatePaper(e) {
+        e.preventDefault();
+        
+        const courseSelect = document.getElementById('courseSelect');
+        const courseID = document.getElementById('selectedCourseID').value;
+        const year = document.getElementById('yearInput').value;
+        const semester = document.getElementById('semesterSelect').value;
+        const examType = document.getElementById('examTypeSelect').value;
+        const facultyID = document.getElementById('facultySelect').value;
+        const createButton = e.target.querySelector('button[type="submit"]');
+
+        if (!courseID || !year || !examType || !facultyID) {
+            alert("Please fill in all required paper details.");
+            return;
+        }
+
+        const data = { CourseID: courseID, Year: year, Semester: semester, ExamType: examType, FacultyID: facultyID };
+        createButton.disabled = true;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/papers/create`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await response.json();
+
+            if (response.ok) {
+                activePaper = {
+                    id: result.paper_id,
+                    course_id: courseID,
+                    title: `${courseSelect.options[courseSelect.selectedIndex].text} (${year} / ${examType})`
+                };
+                sessionStorage.setItem('activePaper', JSON.stringify(activePaper));
+                
+                updatePaperAssemblyView();
+                alert(`Paper ID ${activePaper.id} created successfully! You can now add questions.`);
+                
+                currentPaperQuestionsData = []; 
+                renderCurrentPaperQuestions();
+                searchQuestionsExcludingPaper(); // Run initial search
+
+            } else {
+                alert('Error creating paper: ' + (result.details || result.error || 'Unknown error'));
+                createButton.disabled = false;
+            }
+        } catch (error) {
+            console.error('Network Error:', error);
+            alert('Network error during paper creation.');
+            createButton.disabled = false;
+        }
+    }
+
+    function updatePaperAssemblyView() {
+        const metaSection = document.getElementById('paperMetadataSection');
+        const assemblySection = document.getElementById('paperAssemblySection');
+        const activeBox = document.getElementById('activePaperBox');
+        const viewLink = document.getElementById('viewPaperLink');
+
+        if (activePaper) {
+            metaSection.style.display = 'none';
+            assemblySection.style.display = 'block';
+            activeBox.style.display = 'block';
+            
+            document.getElementById('activePaperID').textContent = activePaper.id;
+            document.getElementById('activePaperTitle').textContent = activePaper.title;
+            // Update the preview link
+            viewLink.href = `pyq_viewer.html?paperId=${activePaper.id}`;
+            viewLink.style.display = 'inline-block';
+            
+            // Set the search filter's CLOs based on the active paper's course
+            fetchClosByCourse(activePaper.course_id); 
+        } else {
+            metaSection.style.display = 'block';
+            assemblySection.style.display = 'none';
+            activeBox.style.display = 'none';
+            viewLink.style.display = 'none';
+        }
+    }
+
+    // --- QUESTION SEARCH & LINKING (INCLUDING CRITICAL exclude_paper_id FIX) ---
+
+    // Wrapper function for form submit/onchange events
+    async function handleQuestionSearch(e) {
+        if (e && e.preventDefault) e.preventDefault(); 
+
+        if (!activePaper) {
+            if (e && e.type === 'submit') { 
+                alert("Please create a paper draft first before searching questions.");
+            }
+            return;
+        }
+        searchQuestionsExcludingPaper(); 
+    }
+
+    // Core search logic implementing the exclude_paper_id filter
+    async function searchQuestionsExcludingPaper() {
+        if (!activePaper) return;
+
+        const searchResultsDiv = document.getElementById('searchResults');
+        searchResultsDiv.innerHTML = '<p class="text-center text-info mt-3">Searching...</p>';
+        
+        // Get all filter values
+        const courseId = activePaper.course_id; // Use the CourseID of the active paper
+        const cloId = document.getElementById('cloSelect').value;
+        const difficulty = document.getElementById('difficultySelect').value;
+        const qType = document.getElementById('qTypeSelect').value;
+        const searchText = document.getElementById('searchText').value;
+        
+        const params = new URLSearchParams();
+        
+        // CRITICAL: Filter to exclude questions already in this paper
+        params.append('exclude_paper_id', activePaper.id); 
+
+        // Add standard filters
+        params.append('course_id', courseId);
+        if (cloId) params.append('clo_id', cloId);
+        if (difficulty) params.append('difficulty', difficulty);
+        if (qType) params.append('question_type', qType);
+        if (searchText) params.append('search_text', searchText);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/questions?${params.toString()}`); 
+            const questions = await response.json();
+            
+            renderSearchResults(questions);
+
+        } catch (error) {
+            console.error('Error fetching search results:', error);
+            searchResultsDiv.innerHTML = '<p class="text-center text-danger mt-3">Error fetching questions.</p>';
+        }
+    }
+
+    function renderSearchResults(questions) {
+        const resultsDiv = document.getElementById('searchResults');
+        resultsDiv.innerHTML = '';
+
+        if (questions.length === 0) {
+            resultsDiv.innerHTML = '<p class="text-center text-muted mt-3">No questions found matching the filter.</p>';
+            return;
+        }
+
+        questions.forEach(q => {
+            // Note: Since searchQuestionsExcludingPaper uses the server-side filter, 
+            // the client-side check is technically redundant but harmless.
+            const isLinked = currentPaperQuestionsData.some(pq => pq.QuestionID === q.QuestionID); 
+            
+            const box = document.createElement('div');
+            box.className = 'question-box-mini d-flex justify-content-between align-items-center';
+            box.innerHTML = `
+                <div class="text-truncate-2" title="${q.QuestionText}">
+                    <span class="badge bg-secondary">${q.Marks} M</span> 
+                    <span class="badge bg-primary">${q.QuestionType}</span>
+                    ${q.QuestionText}
+                </div>
+                ${isLinked ? 
+                    '<button class="btn btn-sm btn-outline-success disabled" disabled>Added</button>' :
+                    `<button class="btn btn-sm btn-success" onclick="addQuestionToPaper(${q.QuestionID})">Add</button>`
+                }
+            `;
+            resultsDiv.appendChild(box);
+        });
+    }
+    
+    async function addQuestionToPaper(questionId) {
+        if (!activePaper) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/papers/${activePaper.id}/questions`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question_id: questionId })
+            });
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(result.message);
+                // Update both panels
+                fetchCurrentPaperQuestions();
+                searchQuestionsExcludingPaper(); 
+            } else {
+                alert('Failed to add question: ' + (result.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Network Error:', error);
+            alert('Network error during adding question.');
+        }
+    }
+    
+    // --- CURRENT PAPER QUESTIONS MANAGEMENT ---
+
+    // Fetches and updates the list of questions currently in the paper (API Route 13: /papers/<paper_id>/content)
+    async function fetchCurrentPaperQuestions() {
+        if (!activePaper) return;
+        
+        const contentDiv = document.getElementById('currentPaperQuestions');
+        contentDiv.innerHTML = '<p class="text-center text-info mt-3">Loading paper content...</p>';
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/papers/${activePaper.id}/content`);
+            const result = await response.json();
+
+            if (response.ok && result.questions) {
+                currentPaperQuestionsData = result.questions.map(q => ({
+                    QuestionID: q.QuestionID,
+                    QuestionText: q.QuestionText,
+                    Marks: q.Marks,
+                    CLOText: q.CLOText 
+                }));
+                renderCurrentPaperQuestions();
+            } else {
+                currentPaperQuestionsData = [];
+                renderCurrentPaperQuestions();
+            }
+        } catch (error) {
+            console.error('Error fetching current paper questions:', error);
+            contentDiv.innerHTML = '<p class="text-center text-danger mt-3">Error loading paper questions.</p>';
+        }
+    }
+
+    function renderCurrentPaperQuestions() {
+        const contentDiv = document.getElementById('currentPaperQuestions');
+        const countSpan = document.getElementById('paperQuestionCount');
+        const totalMarksSpan = document.getElementById('totalMarks');
+        
+        contentDiv.innerHTML = '';
+        let totalMarks = 0;
+
+        if (currentPaperQuestionsData.length === 0) {
+            contentDiv.innerHTML = '<p class="text-muted text-center mt-3">No questions added yet.</p>';
+            countSpan.textContent = 0;
+            totalMarksSpan.textContent = 0;
+            return;
+        }
+
+        currentPaperQuestionsData.forEach((q, index) => {
+            totalMarks += q.Marks;
+            const box = document.createElement('div');
+            box.className = 'question-box-mini d-flex justify-content-between align-items-start';
+            box.innerHTML = `
+                <div class="me-2">
+                    <span class="fw-bold">${index + 1}.</span> 
+                    <span class="badge bg-secondary">${q.Marks} M</span> 
+                    <small class="text-muted">(${q.CLOText || 'N/A'})</small>
+                    <div class="text-truncate-2" title="${q.QuestionText}">${q.QuestionText}</div>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="removeQuestionFromPaper(${q.QuestionID})">
+                    &times;
+                </button>
+            `;
+            contentDiv.appendChild(box);
+        });
+        
+        countSpan.textContent = currentPaperQuestionsData.length;
+        totalMarksSpan.textContent = totalMarks;
+    }
+
+    // Removes a question from the paper (API Route 12: DELETE /papers/<paper_id>/questions/<question_id>)
+    async function removeQuestionFromPaper(questionId) {
+        if (!activePaper || !confirm(`Are you sure you want to remove Question ID ${questionId} from this paper?`)) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/papers/${activePaper.id}/questions/${questionId}`, {
+                method: 'DELETE'
+            });
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(result.message);
+                // Update both panels
+                fetchCurrentPaperQuestions(); 
+                searchQuestionsExcludingPaper();
+            } else {
+                alert('Failed to remove question: ' + (result.error || 'Unknown error'));
+            }
+        } catch (error) {
+            console.error('Network Error:', error);
+            alert('Network error during removal.');
+        }
+    }
+</script>
+</body>
+</html>

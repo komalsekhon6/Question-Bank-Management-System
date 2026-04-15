@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PYQ Viewer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .question-box { border: 1px solid #ccc; padding: 15px; margin-bottom: 20px; border-radius: 5px; }
+        .question-meta { font-size: 0.9em; color: #666; margin-bottom: 10px; }
+        .paper-link { cursor: pointer; }
+        /* Added for spacing below the question text before options */
+        .list-group { margin-top: 10px; } 
+        /* Style for the dynamic search results dropdown */
+        #courseSearchResults {
+            position: absolute;
+            z-index: 1000;
+            width: 90%; /* Adjust to match input width */
+            background: white;
+            border: 1px solid #ced4da;
+            border-top: none;
+            max-height: 200px;
+            overflow-y: auto;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: none; /* Ensure it starts hidden */
+        }
+        #courseSearchResults li {
+            padding: 8px 15px;
+            cursor: pointer;
+        }
+        #courseSearchResults li:hover {
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body onload="checkRole()">
+    <script src="auth_check.js"></script>
+    <script src="utils.js"></script>
+    <script src="logout_redirect.js"></script>
+
+    <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <div class="container">
+            <a class="navbar-brand" id="dashboardLink" href="faculty_dashboard.html">Dashboard</a>
+            <button class="btn btn-sm btn-outline-danger" onclick="logout()">Logout</button>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h2 class="mb-4">Previous Year Paper Viewer</h2>
+
+        <div class="card p-4 mb-4 shadow-sm" id="pyqSearchBox">
+            <h5 class="card-title text-center text-danger">Search Question Papers</h5>
+            <form id="courseSearchForm" class="row g-3 justify-content-center">
+                <div class="col-md-5 position-relative">
+                    <label class="form-label text-danger">Course Name or ID:</label>
+                    <input type="text" id="courseSearchInput" class="form-control" placeholder="Type Course Name or ID (e.g., Database or ULC501)">
+                    <ul id="courseSearchResults"></ul>
+                    <input type="hidden" id="selectedCourseID" value="">
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <button type="submit" class="btn btn-danger w-100">Search Papers</button>
+                </div>
+            </form>
+        </div>
+        
+        <div id="papersListContainer">
+            <h5>Available Papers (Filter)</h5>
+            
+            <div class="row g-3 mb-3">
+                <div class="col-md-3">
+                    <label class="form-label small">Year:</label>
+                    <select id="yearSelect" class="form-select form-select-sm" onchange="applyFiltersAndRenderTable()">
+                        <option value="">All Years</option>
+                        </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Semester:</label>
+                    <select id="semesterSelect" class="form-select form-select-sm" onchange="applyFiltersAndRenderTable()">
+                        <option value="">All Semesters</option>
+                        <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                        <option value="5">5</option><option value="6">6</option><option value="7">7</option><option value="8">8</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Exam Type:</label>
+                    <select id="examTypeSelect" class="form-select form-select-sm" onchange="applyFiltersAndRenderTable()">
+                        <option value="">All Types</option>
+                        <option value="Quiz">Quiz</option>
+                        <option value="MidSem">MidSem</option>
+                        <option value="EndSem">EndSem</option>
+                        <option value="Auxiliary">Auxiliary</option>
+                    </select>
+                </div>
+                <div class="col-md-3" id="facultyFilterColumn">
+                    <label class="form-label small">Set by (Faculty):</label>
+                    <select id="facultySelect" class="form-select form-select-sm" onchange="applyFiltersAndRenderTable()">
+                        <option value="">All Faculty</option>
+                        </select>
+                </div>
+            </div>
+
+            <table class="table table-hover table-sm">
+                <thead>
+                    <tr>
+                        <th>Course</th>
+                        <th>Year</th>
+                        <th>Semester</th>
+                        <th>Type</th>
+                        <th id="setByHeader">Set By</th> 
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="papersTableBody">
+                    <tr><td colspan="6" class="text-muted">Loading papers...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div id="paperViewer" style="display:none;">
+            <hr>
+            <h4 class="mb-3">Paper Details (<span id="paperTitle"></span>)</h4>
+            <div id="paperMetadata" class="alert alert-secondary"></div>
+            <div id="paperContent"></div>
+            <button onclick="showPapersList()" class="btn btn-secondary mt-3">Back to List</button>
+        </div>
+
+    </div>
+
+    <script>
+        // Global master list to store all papers for the current search (course or all courses)
+        let papersMasterList = []; 
+        let allCourses = []; 
+        let userRole = localStorage.getItem('userRole'); // Get the role once
+        
+        // --- UTILITY/API FUNCTIONS (Copied from existing code for completeness) ---
+
+        /**
+         * Generic API call function. Uses API_BASE_URL imported from utils.js.
+         * Assumes API_BASE_URL is available globally (e.g., from utils.js)
+         */
+        async function makeApiCall(url, method = 'GET', data = null) {
+            const options = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'Authorization': `Bearer ${localStorage.getItem('authToken')}` // Placeholder for real auth
+                }
+            };
+
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            const response = await fetch(url, options);
+            
+            // Assume logout() and API_BASE_URL are globally available
+            if (response.status === 401 || response.status === 403) {
+                console.warn("API call failed authorization. Logging out.");
+                // logout(); 
+            }
+            
+            if (!response.ok) {
+                return response;
+            }
+            return response;
+        }
+
+        // --- ROLE CHECK AND INITIAL SETUP ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // FIX: Adjust the dashboard link based on role
+            const dashboardLink = document.getElementById('dashboardLink');
+            if (userRole === 'Student') {
+                dashboardLink.href = 'student_view.html';
+            } else {
+                 dashboardLink.href = 'faculty_dashboard.html';
+            }
+            
+            // Load all courses for the search box autocomplete
+            loadAllCoursesForSearch(); 
+            // Initial load fetches all papers (no course filter is selected by default)
+            fetchMasterPapersList();
+            
+            // Search box listeners (now for all users)
+            const courseSearchInput = document.getElementById('courseSearchInput');
+            if (courseSearchInput) {
+                courseSearchInput.addEventListener('input', handleCourseSearchInput);
+            }
+            document.getElementById('courseSearchForm').addEventListener('submit', (e) => {
+                e.preventDefault();
+                fetchMasterPapersList(); // Trigger search when button is clicked
+            });
+        });
+
+
+        // --- Dynamic Search Logic (Now for All Users) ---
+        
+        async function loadAllCoursesForSearch() {
+            // Loads courses for the search autocomplete.
+            try {
+                // API_BASE_URL is assumed to be defined in utils.js
+                const response = await makeApiCall(`${API_BASE_URL}/courses`); 
+                if (response.ok) {
+                    allCourses = await response.json();
+                } else {
+                    console.warn('Could not load all courses for search.');
+                }
+            } catch (error) {
+                console.error('ERROR loading all courses:', error);
+            }
+        }
+        
+        function handleCourseSearchInput(e) {
+            const query = e.target.value.toLowerCase();
+            const resultsList = document.getElementById('courseSearchResults');
+            resultsList.innerHTML = '';
+            document.getElementById('selectedCourseID').value = ''; 
+
+            if (query.length < 2) { 
+                resultsList.style.display = 'none';
+                return;
+            }
+
+            const filteredCourses = allCourses.filter(c => 
+                c.CourseName.toLowerCase().includes(query) || c.CourseID.toLowerCase().includes(query)
+            );
+
+            if (filteredCourses.length > 0) {
+                filteredCourses.slice(0, 10).forEach(course => { 
+                    const li = document.createElement('li');
+                    li.textContent = `${course.CourseName} (ID: ${course.CourseID})`;
+                    li.onclick = () => selectCourse(course.CourseID, course.CourseName);
+                    resultsList.appendChild(li);
+                });
+                resultsList.style.display = 'block';
+            } else {
+                resultsList.style.display = 'none';
+            }
+        }
+        
+        document.addEventListener('click', (e) => {
+            const resultsList = document.getElementById('courseSearchResults');
+            const searchInput = document.getElementById('courseSearchInput');
+            if (resultsList && searchInput && e.target !== searchInput && e.target.parentNode !== resultsList) {
+                resultsList.style.display = 'none';
+            }
+        });
+
+        function selectCourse(courseID, courseName) {
+            document.getElementById('courseSearchInput').value = `${courseName} (ID: ${courseID})`;
+            document.getElementById('selectedCourseID').value = courseID;
+            document.getElementById('courseSearchResults').style.display = 'none';
+            fetchMasterPapersList(); 
+        }
+
+        // --- 1. Fetch Master List of Papers (Unified Logic) ---
+        async function fetchMasterPapersList() {
+            // Get the Course ID from the search box ONLY
+            let courseId = document.getElementById('selectedCourseID').value;
+
+            const tbody = document.getElementById('papersTableBody');
+            tbody.innerHTML = '<tr><td colspan="6">Loading papers...</td></tr>';
+            
+            const params = new URLSearchParams();
+            if (courseId) params.append('course_id', courseId);
+
+            let url = `${API_BASE_URL}/papers`;
+            if (params.toString()) { url = `${url}?${params.toString()}`; }
+
+            try {
+                const response = await makeApiCall(url);
+                papersMasterList = await response.json(); 
+                
+                // Always populate both Year and Faculty filters for full functionality
+                populateYearFilter(papersMasterList);
+                populateFacultyFilter(papersMasterList); 
+
+                applyFiltersAndRenderTable(); 
+
+            } catch (error) {
+                console.error('Error fetching master papers list:', error);
+                tbody.innerHTML = '<tr><td colspan="6" class="text-danger">Error fetching paper list. Check console.</td></tr>';
+                papersMasterList = []; 
+                populateYearFilter([]); 
+                populateFacultyFilter([]);
+            }
+        }
+
+        // --- 2. Apply Local Filters and Render Table ---
+        function applyFiltersAndRenderTable() {
+            const year = document.getElementById('yearSelect').value;
+            const semester = document.getElementById('semesterSelect').value;
+            const examType = document.getElementById('examTypeSelect').value;
+            const facultyId = document.getElementById('facultySelect').value;
+            
+            const filteredPapers = papersMasterList.filter(p => {
+                if (year && p.Year != year) return false; 
+                if (semester && p.Semester != semester) return false;
+                if (examType && p.ExamType.trim() != examType) return false; 
+                if (facultyId && p.SetByID != facultyId) return false; 
+                
+                return true;
+            });
+
+            renderPapersTable(filteredPapers);
+        }
+
+        // --- Helper function to get unique years from papers ---
+        function getUniqueYears(papers) {
+            const years = new Set(papers.map(p => p.Year));
+            return Array.from(years).filter(y => y).sort((a, b) => b - a); 
+        }
+
+        // --- Function: Populate the Year Dropdown with Unique Years ---
+        function populateYearFilter(papers) {
+            const uniqueYears = getUniqueYears(papers);
+            const yearSelect = document.getElementById('yearSelect');
+            const currentValue = yearSelect.value; 
+            
+            yearSelect.innerHTML = '<option value="">All Years</option>'; 
+            
+            uniqueYears.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearSelect.appendChild(option);
+            });
+            
+            if (currentValue && yearSelect.querySelector(`option[value="${currentValue}"]`)) {
+                yearSelect.value = currentValue;
+            } else {
+                yearSelect.value = ''; 
+            }
+        }
+        
+        // --- Helper function to get unique faculty from papers ---
+        function getUniqueFaculty(papers) {
+            const facultyMap = {}; 
+            papers.forEach(p => {
+                if (p.SetByID && !facultyMap[p.SetByID]) {
+                    facultyMap[p.SetByID] = p.SetBy; 
+                }
+            });
+            return Object.keys(facultyMap)
+                .map(id => ({ id: id, name: facultyMap[id] }))
+                .sort((a, b) => a.name.localeCompare(b.name));
+        }
+        
+        // --- Function: Populate the Faculty Dropdown with Unique Faculty (Always Runs) ---
+        function populateFacultyFilter(papers) {
+            const uniqueFaculty = getUniqueFaculty(papers);
+            const facultySelect = document.getElementById('facultySelect');
+            const currentValue = facultySelect.value;
+            
+            facultySelect.innerHTML = '<option value="">All Faculty</option>'; 
+            
+            uniqueFaculty.forEach(f => {
+                const option = document.createElement('option');
+                option.value = f.id;
+                option.textContent = f.name;
+                facultySelect.appendChild(option);
+            });
+            
+            if (currentValue && facultySelect.querySelector(`option[value="${currentValue}"]`)) {
+                facultySelect.value = currentValue;
+            } else {
+                facultySelect.value = ''; 
+            }
+        }
+
+
+        // --- 3. Render the Table Rows (Unified) ---
+        function renderPapersTable(papers) {
+            const tbody = document.getElementById('papersTableBody');
+            tbody.innerHTML = '';
+
+            if (!papers || papers.length === 0) {
+                // Colspan is always 6 now (Course, Year, Semester, Type, Set By, Action)
+                tbody.innerHTML = `<tr><td colspan="6">No papers found matching the selected criteria.</td></tr>`;
+                return;
+            }
+
+            papers.forEach(p => {
+                const row = tbody.insertRow();
+                row.insertCell().textContent = p.CourseName;
+                row.insertCell().textContent = p.Year;
+                row.insertCell().textContent = p.Semester;
+                row.insertCell().textContent = p.ExamType;
+                
+                // Set By column is always added/visible
+                row.insertCell().textContent = p.SetBy;
+                
+                const actionCell = row.insertCell();
+                const viewButton = document.createElement('button');
+                viewButton.className = 'btn btn-sm btn-outline-primary';
+                viewButton.textContent = 'View';
+                viewButton.onclick = () => fetchPaperContent(p.PaperID);
+                actionCell.appendChild(viewButton);
+            });
+        }
+
+        // --- Function: Fetch Single Paper Content by ID ---
+        async function fetchPaperContent(paperId) {
+            const metadataDiv = document.getElementById('paperMetadata');
+            const contentDiv = document.getElementById('paperContent');
+            const viewer = document.getElementById('paperViewer');
+            const listContainer = document.getElementById('papersListContainer');
+            
+            metadataDiv.innerHTML = 'Loading...';
+            contentDiv.innerHTML = '';
+            
+            listContainer.style.display = 'none';
+            viewer.style.display = 'block';
+
+            try {
+                const response = await makeApiCall(`${API_BASE_URL}/papers/${paperId}/content`);
+                const result = await response.json();
+
+                if (!response.ok) {
+                    metadataDiv.innerHTML = `<p class="text-danger">Error: ${result.message || 'Paper content not found or API error.'}</p>`;
+                    return;
+                }
+
+                renderPaperContent(result.metadata, result.questions);
+            } catch (error) {
+                metadataDiv.innerHTML = '<p class="text-danger">Network Error: Could not connect to API.</p>';
+                console.error('Fetch error:', error);
+            }
+        }
+        
+        // --- Function: Render the Content of the Selected Paper (MODIFIED to include MCQ options/correct answer) ---
+        function renderPaperContent(metadata, questions) {
+            const contentDiv = document.getElementById('paperContent');
+            const metadataDiv = document.getElementById('paperMetadata');
+            document.getElementById('paperTitle').textContent = `Paper ID ${metadata.PaperID} (${metadata.CourseName})`;
+
+            // Full Metadata including 'Set By' for all users
+            let metadataHtml = `
+                <strong>Course:</strong> ${metadata.CourseName} | 
+                <strong>Year:</strong> ${metadata.Year} | 
+                <strong>Semester:</strong> ${metadata.Semester} | 
+                <strong>Exam Type:</strong> ${metadata.ExamType} |
+                <strong>Set by:</strong> ${metadata.Faculty}
+            `;
+            
+            metadataDiv.innerHTML = metadataHtml;
+
+            // Render Questions
+            if (questions.length === 0) {
+                 contentDiv.innerHTML = '<p class="text-warning">This paper has no questions linked to it yet.</p>';
+                 return;
+            }
+
+            questions.forEach((q, index) => {
+                const box = document.createElement('div');
+                box.className = 'question-box';
+                
+                // Full Question Metadata for all users
+                let questionMetaHtml = `[ID: ${q.QuestionID} | Type: ${q.QuestionType} | Marks: ${q.Marks} | CLO: ${q.CLOText}]`;
+                
+                let optionsHtml = '';
+                
+                // NEW LOGIC to display options and correct answer for MCQs
+                if (q.QuestionType === 'MCQ' && q.Options && q.Options.length > 0) {
+                    optionsHtml = '<ul class="list-group list-group-flush mt-3">';
+                    const letters = ['A', 'B', 'C', 'D', 'E', 'F']; 
+                    
+                    q.Options.forEach((option, optIndex) => {
+                        // Backend returns 'IsCorrect' as 1 or 0
+                        const isCorrect = option.IsCorrect == 1; 
+                        // Use Bootstrap classes for visual distinction
+                        let optionClass = isCorrect ? 'list-group-item-success fw-bold' : 'list-group-item-light';
+                        let correctLabel = isCorrect ? ' <span class="badge bg-success float-end">Correct Option</span>' : '';
+                        
+                        optionsHtml += `
+                            <li class="list-group-item ${optionClass}">
+                                ${letters[optIndex]}. ${option.OptionText} ${correctLabel}
+                            </li>
+                        `;
+                    });
+                    optionsHtml += '</ul>';
+                }
+
+                box.innerHTML = `
+                    <h6>Q${index + 1}. ${q.QuestionText}</h6>
+                    <p class="question-meta">
+                        ${questionMetaHtml}
+                    </p>
+                    ${optionsHtml}
+                `;
+                contentDiv.appendChild(box);
+            });
+        }
+        
+        // --- Function: Hide Content Viewer and Show List ---
+        function showPapersList() {
+            document.getElementById('paperViewer').style.display = 'none';
+            document.getElementById('papersListContainer').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
